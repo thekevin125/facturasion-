@@ -37,8 +37,8 @@ const InvoiceForm = () => {
     },
     items: [
       {
-        code_reference: "",
-        name: "",
+        code_reference: " 15154  ",
+        name: "",  // Campo agregado
         quantity: 1,
         discount_rate: 0,
         price: 0,
@@ -55,10 +55,12 @@ const InvoiceForm = () => {
   const [numberingRanges, setNumberingRanges] = useState([]);
   const [products, setProducts] = useState([]);
   const [measurementUnits, setMeasurementUnits] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const tokenResponse = await axios.post(
           `${VITE_API_URL}/oauth/token`,
           {
@@ -92,6 +94,8 @@ const InvoiceForm = () => {
       } catch (error) {
         console.error("Error al obtener datos:", error);
         alert("Error al obtener datos");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -127,7 +131,7 @@ const InvoiceForm = () => {
         ...prev.items,
         {
           code_reference: "",
-          name: "",
+          name: "",  // Asegurándose de que el campo `name` sea parte de cada nuevo item
           quantity: 1,
           discount_rate: 0,
           price: 0,
@@ -190,6 +194,8 @@ const InvoiceForm = () => {
   return (
     <form onSubmit={handleSubmit}>
       <h2>Crear Factura</h2>
+
+      {/* Rango de Numeración */}
       <div>
         <label>Rango de Numeración:</label>
         <select
@@ -258,17 +264,13 @@ const InvoiceForm = () => {
           <h3>Producto {index + 1}</h3>
           <div>
             <label>Producto:</label>
-            <select
+            <input
+              type="text"  // Cambiado de select a input de texto
               name="name"
               value={item.name}
               onChange={(e) => handleItemChange(index, e)}
-            >
-              {products.map((product) => (
-                <option key={product.id} value={product.name}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Escribe el nombre del producto"
+            />
           </div>
 
           <div>
@@ -332,7 +334,9 @@ const InvoiceForm = () => {
         Agregar Producto
       </button>
 
-      <button type="submit">Crear Factura</button>
+      <button type="submit" disabled={loading}>
+        {loading ? "Creando..." : "Crear Factura"}
+      </button>
     </form>
   );
 };

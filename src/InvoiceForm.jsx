@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import './services/hola.css';
 
 const InvoiceForm = () => {
   const VITE_API_URL = "https://api-sandbox.factus.com.co";
@@ -10,7 +11,7 @@ const InvoiceForm = () => {
 
   const [formData, setFormData] = useState({
     numbering_range_id: 8,
-    reference_code: "I3",
+    reference_code: "",
     observation: "",
     payment_form: "1",
     payment_due_date: "2024-12-30",
@@ -37,8 +38,8 @@ const InvoiceForm = () => {
     },
     items: [
       {
-        code_reference: " 15154  ",
-        name: "",  // Campo agregado
+        code_reference: "",
+        name: "",  
         quantity: 1,
         discount_rate: 0,
         price: 0,
@@ -131,7 +132,7 @@ const InvoiceForm = () => {
         ...prev.items,
         {
           code_reference: "",
-          name: "",  // Asegurándose de que el campo `name` sea parte de cada nuevo item
+          name: "", 
           quantity: 1,
           discount_rate: 0,
           price: 0,
@@ -151,10 +152,14 @@ const InvoiceForm = () => {
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
+
+
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("Enviando datos de la factura:", formData);
-
+  
     try {
       const tokenResponse = await axios.post(
         `${VITE_API_URL}/oauth/token`,
@@ -168,32 +173,95 @@ const InvoiceForm = () => {
         { headers: { Accept: "application/json" } }
       );
       const accessToken = tokenResponse.data.access_token;
-
-      // Validación de la factura antes de enviarla
-      const validateResponse = await axios.post(
-        `${VITE_API_URL}/v1/bills/validate`,
-        formData,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      console.log("Factura validada:", validateResponse.data);
-
-      // Si la validación es exitosa, proceder a crear la factura
-      const createResponse = await axios.post(
-        `${VITE_API_URL}/v1/bills/store`,
-        formData,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      console.log("Factura creada:", createResponse.data);
-      alert("Factura creada exitosamente");
-    } catch (error) {
-      console.error("Error al crear factura:", error);
-      alert("Error al crear factura");
+  
+      // Validar y crear la factura
+      try {
+        const validateCreateResponse = await axios.post(
+          `${VITE_API_URL}/v1/bills/validate`,
+          formData,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        console.log("Factura creada y validada:", validateCreateResponse.data);
+  
+        // Obtener el número de la factura
+        const { status, message, number, cufe, pdf_base_64_encoded, file_name } = validateCreateResponse.data;
+  
+        // Mostrar un mensaje de éxito
+        alert(`Factura creada exitosamente!\nStatus: ${status}\nMensaje: ${message}\nCUFE: ${cufe}`);
+  
+        // Decodificar el PDF en base64 y descargarlo
+        const decodedPdf = atob(pdf_base_64_encoded); // Decodifica el Base64
+  
+        // Crear un Blob del PDF decodificado
+        const blob = new Blob([new Uint8Array([...decodedPdf].map((char) => char.charCodeAt(0)))], {
+          type: 'application/pdf',
+        });
+  
+        // Crear un enlace de descarga
+        const downloadLink = document.createElement("a");
+        downloadLink.href = URL.createObjectURL(blob);
+        downloadLink.download = file_name; // El nombre del archivo PDF
+        downloadLink.click(); // Simula el clic para iniciar la descarga
+  
+        // Enviar la factura a la DIAN
+        try {
+          const sendResponse = await axios.post(
+            `${VITE_API_URL}/v1/bills/send/${number}`,
+            {}, // El cuerpo de la solicitud puede ir vacío o con los parámetros requeridos
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          console.log("Factura enviada a la DIAN:", sendResponse.data);
+          alert("Factura enviada exitosamente a la DIAN.");
+        } catch (sendError) {
+          console.error("Error al enviar la factura a la DIAN:", sendError.response.data);
+          alert("Error al enviar la factura a la DIAN.");
+        }
+      } catch (validationError) {
+        if (validationError.response) {
+          console.error("Error al crear y validar la factura:", validationError.response.data);
+          alert(
+            `Error al crear y validar la factura: ${validationError.response.data.message || "Error desconocido"}`
+          );
+        } else {
+          console.error("Error desconocido al crear y validar la factura:", validationError);
+          alert("Error desconocido durante la validación de la factura");
+        }
+      }
+    } catch (authError) {
+      console.error("Error de autenticación:", authError);
+      alert("Error al obtener el token de autenticación. Por favor, revisa tus credenciales.");
     }
   };
-
+  
+  
   return (
     <form onSubmit={handleSubmit}>
       <h2>Crear Factura</h2>
+
+      {/* Campo Reference Code */}
+      <div>
+        <label>Código de Referencia:</label>
+        <input
+          type="text"
+          name="reference_code"
+          value={formData.reference_code}
+          onChange={handleChange}
+        />
+      </div>
+
+      {/* Campo Observación */}
+      <div>
+        <label>Observación:</label>
+        <input
+          type="text"
+          name="observation"
+          value={formData.observation}
+          onChange={handleChange}
+        />
+      </div>
+
+
+
 
       {/* Rango de Numeración */}
       <div>
@@ -210,6 +278,9 @@ const InvoiceForm = () => {
           ))}
         </select>
       </div>
+
+
+
 
       {/* Información del Cliente */}
       <div>
@@ -258,21 +329,22 @@ const InvoiceForm = () => {
         />
       </div>
 
+
+
       {/* Campos de Productos (Items) */}
       {formData.items.map((item, index) => (
         <div key={index}>
           <h3>Producto {index + 1}</h3>
           <div>
-            <label>Producto:</label>
+            <label>Referencia:</label>
             <input
-              type="text"  // Cambiado de select a input de texto
-              name="name"
-              value={item.name}
+              type="text"
+              name="code_reference"
+              value={item.code_reference}
               onChange={(e) => handleItemChange(index, e)}
-              placeholder="Escribe el nombre del producto"
             />
           </div>
-
+          
           <div>
             <label>Unidad de Medida:</label>
             <select
@@ -287,22 +359,21 @@ const InvoiceForm = () => {
               ))}
             </select>
           </div>
-
+          <div>
+            <label>Nombre:</label>
+            <input
+              type="text"
+              name="name"
+              value={item.name}
+              onChange={(e) => handleItemChange(index, e)}
+            />
+          </div>
           <div>
             <label>Cantidad:</label>
             <input
               type="number"
               name="quantity"
               value={item.quantity}
-              onChange={(e) => handleItemChange(index, e)}
-            />
-          </div>
-          <div>
-            <label>Descuento:</label>
-            <input
-              type="number"
-              name="discount_rate"
-              value={item.discount_rate}
               onChange={(e) => handleItemChange(index, e)}
             />
           </div>
@@ -316,13 +387,15 @@ const InvoiceForm = () => {
             />
           </div>
           <div>
-            <label>Impuesto:</label>
-            <input
-              type="number"
+            <label>IVA:</label>
+            <select
               name="tax_rate"
               value={item.tax_rate}
               onChange={(e) => handleItemChange(index, e)}
-            />
+            >
+              <option value="19.00">19%</option>
+              <option value="0.00">Exento</option>
+            </select>
           </div>
           <button type="button" onClick={() => handleRemoveItem(index)}>
             Eliminar Producto
@@ -330,10 +403,12 @@ const InvoiceForm = () => {
         </div>
       ))}
 
+      {/* Botón para agregar otro producto */}
       <button type="button" onClick={handleAddItem}>
         Agregar Producto
       </button>
 
+      {/* Botón de envío */}
       <button type="submit" disabled={loading}>
         {loading ? "Creando..." : "Crear Factura"}
       </button>
